@@ -14,7 +14,6 @@ import mediapipe as mp
 import numpy as np
 
 
-
 class HandDetector:
     """Wrapper around MediaPipe Hands for robust landmark detection."""
 
@@ -42,6 +41,54 @@ class HandDetector:
         self.TIP_IDS = [4, 8, 12, 16, 20]      # Thumb, Index, Middle, Ring, Pinky
         self.PIP_IDS = [3, 6, 10, 14, 18]
         self.MCP_IDS = [2, 5, 9, 13, 17]
+
+        # Internal tracking state
+        self.last_results = None
+        self.last_hand_type = "Right"
+        self.last_raw_landmarks = None
+
+    def find_landmarks(self, img: np.ndarray, draw: bool = True):
+        """
+        Unified detection method returning (annotated_img, lm_list, bbox).
+        lm_list is a list of 21 landmark dicts for the primary hand.
+        """
+        annotated_img, results = self.find_hands(img, draw=draw)
+        self.last_results = results
+        hands_data = self.get_hand_landmarks_list(annotated_img, results)
+        if hands_data:
+            primary = hands_data[0]
+            self.last_hand_type = primary['type']
+            self.last_raw_landmarks = primary['raw_landmarks']
+            return annotated_img, primary['landmarks'], primary['bbox']
+
+        self.last_hand_type = "Right"
+        self.last_raw_landmarks = None
+        return annotated_img, [], None
+
+    def get_hand_type(self, img: np.ndarray = None) -> str:
+        """Returns detected hand orientation ('Right' or 'Left')."""
+        return self.last_hand_type
+
+    def get_normalized_landmarks(self, lm_list: list = None) -> np.ndarray:
+        """
+        Returns normalized 63-dimensional coordinate feature array.
+        """
+        if self.last_raw_landmarks is not None:
+            return self.extract_normalized_features(self.last_raw_landmarks)
+
+        if lm_list and len(lm_list) >= 21:
+            coords = np.array([[lm['norm_x'], lm['norm_y'], lm['norm_z']] for lm in lm_list], dtype=np.float32)
+            coords = coords - coords[0]
+            ref_dist = np.linalg.norm(coords[9] - coords[0])
+            if ref_dist > 1e-4:
+                coords = coords / ref_dist
+            else:
+                max_val = np.max(np.abs(coords))
+                if max_val > 1e-4:
+                    coords = coords / max_val
+            return coords.flatten()
+
+        return None
 
     def find_hands(self, img: np.ndarray, draw: bool = True):
         """

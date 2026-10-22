@@ -427,8 +427,19 @@ class BiDirectionalSignApp(tk.Tk):
             img_tk = ImageTk.PhotoImage(image=img_pil)
             self.video_canvas.imgtk = img_tk
             self.video_canvas.configure(image=img_tk)
+        else:
+            # Fallback placeholder if camera is initializing or not connected
+            placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(placeholder, "Connecting to camera / Standby...", (80, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
+            img_rgb = cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB)
+            img_pil = Image.fromarray(img_rgb)
+            img_tk = ImageTk.PhotoImage(image=img_pil)
+            self.video_canvas.imgtk = img_tk
+            self.video_canvas.configure(image=img_tk)
 
         self.after(30, self._camera_loop)
+
 
     def update_sentence_display(self):
         en_sentence = self.sentence_builder.sentence
