@@ -15,11 +15,16 @@ import threading
 import time
 from typing import Optional, Dict
 
-import pyttsx3
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+
 try:
     import pythoncom
 except ImportError:
     pythoncom = None
+
 
 try:
     import pygame
@@ -63,13 +68,15 @@ class TTSEngine:
 
         # Fetch available system voices upfront
         self.available_voices = []
-        try:
-            temp_engine = pyttsx3.init()
-            voices = temp_engine.getProperty('voices')
-            self.available_voices = [{'id': v.id, 'name': v.name} for v in voices]
-            del temp_engine
-        except Exception as e:
-            print(f"[TTS] Warning: Failed to query system voices: {e}")
+        if pyttsx3 is not None:
+            try:
+                temp_engine = pyttsx3.init()
+                voices = temp_engine.getProperty('voices')
+                self.available_voices = [{'id': v.id, 'name': v.name} for v in voices]
+                del temp_engine
+            except Exception as e:
+                print(f"[TTS] Note: Could not query system pyttsx3 voices: {e}")
+
 
         # Start dedicated background worker thread
         self._worker_thread = threading.Thread(target=self._run_worker, daemon=True)
@@ -135,15 +142,17 @@ class TTSEngine:
             pythoncom.CoInitialize()
 
         engine = None
-        try:
-            engine = pyttsx3.init()
-            engine.setProperty('rate', self._rate)
-            engine.setProperty('volume', self._volume)
-            voices = engine.getProperty('voices')
-            if voices and 0 <= self._voice_index < len(voices):
-                engine.setProperty('voice', voices[self._voice_index].id)
-        except Exception as e:
-            print(f"[TTS] pyttsx3 initialization note: {e}")
+        if pyttsx3 is not None:
+            try:
+                engine = pyttsx3.init()
+                engine.setProperty('rate', self._rate)
+                engine.setProperty('volume', self._volume)
+                voices = engine.getProperty('voices')
+                if voices and 0 <= self._voice_index < len(voices):
+                    engine.setProperty('voice', voices[self._voice_index].id)
+            except Exception as e:
+                print(f"[TTS] pyttsx3 worker note: {e}")
+
 
         while self._running:
             try:
