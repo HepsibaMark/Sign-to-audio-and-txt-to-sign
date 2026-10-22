@@ -269,19 +269,20 @@ class BiDirectionalSignApp(tk.Tk):
         )
         btn_translate.pack(side=tk.LEFT, padx=4)
 
-        btn_mic_ta = tk.Button(
+        self.btn_mic_ta = tk.Button(
             f_in, text="🎙️ தமிழ் Mic", font=("Segoe UI", 9, "bold"),
             bg="#7209b7", fg="#ffffff", activebackground="#560bad",
             command=lambda: self.t2s_mic_input(lang='ta-IN'), padx=10
         )
-        btn_mic_ta.pack(side=tk.LEFT, padx=4)
+        self.btn_mic_ta.pack(side=tk.LEFT, padx=4)
 
-        btn_mic_en = tk.Button(
+        self.btn_mic_en = tk.Button(
             f_in, text="🎙️ English Mic", font=("Segoe UI", 9, "bold"),
             bg="#4361ee", fg="#ffffff", activebackground="#3a0ca3",
             command=lambda: self.t2s_mic_input(lang='en-US'), padx=10
         )
-        btn_mic_en.pack(side=tk.LEFT, padx=4)
+        self.btn_mic_en.pack(side=tk.LEFT, padx=4)
+
 
         # Middle Content: Sign Display Card (Left) + Timeline / Steps (Right)
         f_mid = tk.Frame(container, bg="#1a1c23")
@@ -490,20 +491,32 @@ class BiDirectionalSignApp(tk.Tk):
             self.t2s_translate_and_load(raw_text)
 
     def t2s_mic_input(self, lang: str = 'ta-IN'):
-        self.status_bar.config(text=f" 🎙️ Listening for microphone input ({lang})... Speak now! ", fg="#ffb703")
+        target_btn = self.btn_mic_ta if lang == 'ta-IN' else self.btn_mic_en
+        orig_text = target_btn.cget("text")
+        orig_bg = target_btn.cget("bg")
+
+        target_btn.config(text="🔴 Listening...", bg="#e63946")
+        lang_label = "Tamil (தமிழ்)" if lang == 'ta-IN' else "English"
+        self.status_bar.config(text=f" 🎙️ Listening in {lang_label}... Speak into your microphone now! ", fg="#ffb703")
         self.update()
 
         def _record():
-            recognized = self.t2s_engine.speech_to_text(language=lang)
-            if not recognized.startswith("["):
-                self.t2s_entry.delete(0, tk.END)
-                self.t2s_entry.insert(0, recognized)
-                self.t2s_translate_and_load(recognized)
-                self.status_bar.config(text=f" 🎙️ Transcribed ({lang}): \"{recognized}\"", fg="#38ef7d")
-            else:
-                self.status_bar.config(text=f" {recognized}", fg="#d90429")
+            try:
+                recognized = self.t2s_engine.speech_to_text(language=lang)
+                if not recognized.startswith("["):
+                    self.t2s_entry.delete(0, tk.END)
+                    self.t2s_entry.insert(0, recognized)
+                    self.t2s_translate_and_load(recognized)
+                    self.status_bar.config(text=f" 🎙️ Transcribed ({lang_label}): \"{recognized}\"", fg="#38ef7d")
+                else:
+                    self.status_bar.config(text=f" {recognized}", fg="#ffb703")
+            except Exception as e:
+                self.status_bar.config(text=f" ⚠️ Microphone error: {e}", fg="#d90429")
+            finally:
+                target_btn.config(text=orig_text, bg=orig_bg)
 
         threading.Thread(target=_record, daemon=True).start()
+
 
     def t2s_translate_and_load(self, text: str):
         self.t2s_tokens = self.t2s_engine.translate_text(text)

@@ -525,13 +525,13 @@ class TextToSignEngine:
             return "[Error] SpeechRecognition library is not installed."
 
         recognizer = sr.Recognizer()
-        recognizer.energy_threshold = 300
+        recognizer.energy_threshold = 250
         recognizer.dynamic_energy_threshold = True
 
         try:
             with sr.Microphone() as source:
                 print(f"[STT ({language})] Adjusting for ambient noise... Please wait.")
-                recognizer.adjust_for_ambient_noise(source, duration=0.8)
+                recognizer.adjust_for_ambient_noise(source, duration=0.4)
                 print(f"[STT ({language})] Listening for speech... Speak now!")
                 audio_data = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
                 print("[STT] Processing audio transcription...")
@@ -539,13 +539,14 @@ class TextToSignEngine:
                 print(f"[STT] Transcribed ({language}): \"{text}\"")
                 return text
         except sr.WaitTimeoutError:
-            return "[Warning] No speech detected (timed out)."
+            return "[Warning] No speech heard. Speak clearly into your mic."
         except sr.UnknownValueError:
-            return "[Warning] Could not understand the audio speech."
+            return "[Warning] Speech unclear. Please try again."
         except sr.RequestError as e:
-            return f"[Error] Google Speech Recognition service error: {e}"
+            return f"[Error] Speech Recognition service connection error: {e}"
         except Exception as e:
-            return f"[Error] Microphone access error: {e}"
+            return f"[Error] Microphone error: {e}"
+
 
     def pregenerate_all_signs(self):
         """Pre-renders and saves PNG cards for all standard vocabulary in assets/signs/."""
