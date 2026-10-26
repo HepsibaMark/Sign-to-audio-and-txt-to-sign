@@ -177,10 +177,15 @@ class BiDirectionalSignApp(tk.Tk):
 
         self.lbl_sign_meta = tk.Label(f_det, text="Confidence: 0% | Source: Idle",
                                       font=("Segoe UI", 9), fg="#8d99ae", bg="#20232c")
-        self.lbl_sign_meta.pack(anchor="w", pady=(2, 6))
+        self.lbl_sign_meta.pack(anchor="w", pady=(2, 2))
+
+        self.lbl_ml_probs = tk.Label(f_det, text="ML Model (41 classes): Active",
+                                     font=("Segoe UI", 8, "italic"), fg="#00b4d8", bg="#20232c")
+        self.lbl_ml_probs.pack(anchor="w", pady=(0, 6))
 
         tk.Label(f_det, text="Hold-to-Confirm Stabilization:", font=("Segoe UI", 8),
                  fg="#adb5bd", bg="#20232c").pack(anchor="w")
+
         self.prog_hold = ttk.Progressbar(f_det, orient="horizontal", mode="determinate", length=380)
         self.prog_hold.pack(fill=tk.X, pady=(2, 6))
 
@@ -406,6 +411,12 @@ class BiDirectionalSignApp(tk.Tk):
                 self.lbl_sign_tamil.config(text=f"தமிழ்: {tamil_word} ({translit})")
                 self.lbl_sign_meta.config(text=f"Confidence: {int(conf * 100)}% | Engine: {src}")
 
+                # Display real-time ML Top-3 class probabilities
+                top_cands = getattr(self.classifier, 'last_top_candidates', [])
+                if top_cands:
+                    top_str = " | ".join([f"{c} ({int(p*100)}%)" for c, p in top_cands[:3]])
+                    self.lbl_ml_probs.config(text=f"ML Top-3: {top_str}", fg="#00d2ff")
+
                 if confirmed:
                     # Update sentence buffer UI
                     self.update_sentence_display()
@@ -420,7 +431,9 @@ class BiDirectionalSignApp(tk.Tk):
                 self.prog_hold['value'] = 0
                 self.lbl_sign_name.config(text="NONE", fg="#8d99ae")
                 self.lbl_sign_tamil.config(text="தமிழ்: -")
-                self.lbl_sign_meta.config(text="Confidence: 0% | Idle")
+                self.lbl_sign_meta.config(text="Waiting for gesture... (Sentence preserved)", fg="#8d99ae")
+                self.lbl_ml_probs.config(text="ML Model (41 classes): Ready for input", fg="#6c757d")
+
 
             # Render video frame to Tkinter Canvas
             img_rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
@@ -503,15 +516,20 @@ class BiDirectionalSignApp(tk.Tk):
         def _record():
             try:
                 recognized = self.t2s_engine.speech_to_text(language=lang)
-                if not recognized.startswith("["):
+                if recognized and not recognized.startswith("["):
                     self.t2s_entry.delete(0, tk.END)
                     self.t2s_entry.insert(0, recognized)
                     self.t2s_translate_and_load(recognized)
                     self.status_bar.config(text=f" 🎙️ Transcribed ({lang_label}): \"{recognized}\"", fg="#38ef7d")
                 else:
-                    self.status_bar.config(text=f" {recognized}", fg="#ffb703")
+                    # Isolated failure: do NOT touch existing output or clear current signs
+                    warning_msg = recognized if recognized else "No speech detected."
+                    self.status_bar.config(
+                        text=f" ⚠️ Voice attempt: {warning_msg} (Previous text & signs preserved)",
+                        fg="#ffb703"
+                    )
             except Exception as e:
-                self.status_bar.config(text=f" ⚠️ Microphone error: {e}", fg="#d90429")
+                self.status_bar.config(text=f" ⚠️ Microphone error: {e} (Previous output preserved)", fg="#ffb703")
             finally:
                 target_btn.config(text=orig_text, bg=orig_bg)
 
@@ -519,7 +537,13 @@ class BiDirectionalSignApp(tk.Tk):
 
 
     def t2s_translate_and_load(self, text: str):
-        self.t2s_tokens = self.t2s_engine.translate_text(text)
+        new_tokens = self.t2s_engine.translate_text(text)
+        if not new_tokens:
+            # Isolated failure: keep existing output intact
+            self.status_bar.config(text=f" ⚠️ Could not translate '{text}' to signs. Existing output preserved.", fg="#ffb703")
+            return
+
+        self.t2s_tokens = new_tokens
         self.t2s_current_index = 0
         self.t2s_is_playing = False
         self.btn_t2s_play.config(text="▶ Play", bg="#00b4d8")
@@ -536,6 +560,7 @@ class BiDirectionalSignApp(tk.Tk):
 
         if self.t2s_tokens:
             self.t2s_display_current_sign()
+
 
     def t2s_display_current_sign(self):
         if not self.t2s_tokens or self.t2s_current_index >= len(self.t2s_tokens):

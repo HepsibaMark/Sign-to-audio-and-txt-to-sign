@@ -513,11 +513,13 @@ class TextToSignEngine:
 
         return tokens
 
-    def speech_to_text(self, language: str = 'en-US', timeout: int = 5, phrase_time_limit: int = 8) -> str:
+    def speech_to_text(self, language: str = 'en-US', timeout: int = 8, phrase_time_limit: int = 10) -> str:
         """
         Listens from default system microphone and transcribes speech to text.
         Args:
             language: Speech recognition language code ('en-US', 'en-IN', 'ta-IN').
+            timeout: Maximum seconds to wait for speech to begin.
+            phrase_time_limit: Maximum seconds of speech recording.
         """
         try:
             import speech_recognition as sr
@@ -525,27 +527,28 @@ class TextToSignEngine:
             return "[Error] SpeechRecognition library is not installed."
 
         recognizer = sr.Recognizer()
-        recognizer.energy_threshold = 250
+        recognizer.energy_threshold = 200
         recognizer.dynamic_energy_threshold = True
 
         try:
             with sr.Microphone() as source:
-                print(f"[STT ({language})] Adjusting for ambient noise... Please wait.")
-                recognizer.adjust_for_ambient_noise(source, duration=0.4)
-                print(f"[STT ({language})] Listening for speech... Speak now!")
+                print(f"[STT ({language})] Calibrating mic for 0.3s... Speak clearly!")
+                recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                print(f"[STT ({language})] Listening... Speak now!")
                 audio_data = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
-                print("[STT] Processing audio transcription...")
+                print("[STT] Processing audio transcription with Google Speech API...")
                 text = recognizer.recognize_google(audio_data, language=language)
                 print(f"[STT] Transcribed ({language}): \"{text}\"")
                 return text
         except sr.WaitTimeoutError:
-            return "[Warning] No speech heard. Speak clearly into your mic."
+            return "[Warning] No speech heard within timeout. Speak clearly into your mic."
         except sr.UnknownValueError:
             return "[Warning] Speech unclear. Please try again."
         except sr.RequestError as e:
             return f"[Error] Speech Recognition service connection error: {e}"
         except Exception as e:
             return f"[Error] Microphone error: {e}"
+
 
 
     def pregenerate_all_signs(self):

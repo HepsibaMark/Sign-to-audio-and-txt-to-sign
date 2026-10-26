@@ -16,6 +16,7 @@ class GestureClassifier:
     def __init__(self, model_path: str = None):
         self.model = None
         self.classes = []
+        self.last_top_candidates = []
         self.model_path = model_path or os.path.join(os.path.dirname(__file__), "..", "model", "gesture_model.p")
         self.load_model()
 
@@ -27,36 +28,56 @@ class GestureClassifier:
                     data = pickle.load(f)
                     self.model = data.get('model')
                     self.classes = data.get('classes', [])
-                print(f"[Classifier] Loaded trained model from {self.model_path} with {len(self.classes)} classes.")
+                print(f"[Classifier] Loaded trained ML model from {self.model_path} with {len(self.classes)} classes.")
             except Exception as e:
                 print(f"[Classifier] Note: Could not load model ({e}). Using geometric engine.")
                 self.model = None
         else:
             self.model = None
 
-    def classify(self, normalized_features: np.ndarray, lm_list: list, hand_type: str = "Right") -> tuple:
+    def classify(self, normalized_features: np.ndarray, lm_list: list, hand_type: str = "Right", return_top_k: bool = False) -> tuple:
         """
-        Classifies current hand pose.
+        Classifies current hand pose using the trained Machine Learning Model.
         Returns:
             (predicted_label: str, confidence: float, source: str)
+            or with top_k if return_top_k=True.
         """
-        # 1. Try ML model prediction if available
+        top_candidates = []
+
+        # 1. Primary Machine Learning Inference (Random Forest on 41 classes)
         if self.model is not None and normalized_features is not None:
             try:
                 features = normalized_features.reshape(1, -1)
                 probabilities = self.model.predict_proba(features)[0]
-                max_idx = np.argmax(probabilities)
-                conf = float(probabilities[max_idx])
-                predicted_label = self.classes[max_idx]
 
-                if conf >= 0.70:
-                    return predicted_label, conf, "ML"
+                # Extract Top-3 predicted classes with probabilities
+                top_indices = np.argsort(probabilities)[::-1][:3]
+                top_candidates = [(str(self.classes[idx]), float(probabilities[idx])) for idx in top_indices]
+                self.last_top_candidates = top_candidates
+
+                max_idx = top_indices[0]
+                conf = float(probabilities[max_idx])
+                predicted_label = str(self.classes[max_idx])
+
+                # Accept ML prediction if confidence threshold met
+                if conf >= 0.50:
+                    if return_top_k:
+                        return predicted_label, conf, "ML (Random Forest)", top_candidates
+                    return predicted_label, conf, "ML (Random Forest)"
             except Exception as e:
+                # ML inference error alone fails safely without breaking existing state
                 pass
 
-        # 2. Geometric Heuristic Engine (Rule-based expert system)
+        # 2. Geometric Heuristic Engine (Secondary Safety-Net Validator)
         heuristic_label, conf = self.classify_geometric(lm_list, hand_type)
+        if not top_candidates:
+            top_candidates = [(heuristic_label, conf)]
+            self.last_top_candidates = top_candidates
+
+        if return_top_k:
+            return heuristic_label, conf, "Geometric", top_candidates
         return heuristic_label, conf, "Geometric"
+
 
     def classify_geometric(self, lm: list, hand_type: str = "Right") -> tuple:
         """
