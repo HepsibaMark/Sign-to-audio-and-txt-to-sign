@@ -204,5 +204,5 @@ sop-project/
 ## 👥 Authors & Acknowledgments
 
 * **Developer**: [HepsibaMark](https://github.com/HepsibaMark)
-* **Project**: Statement of Purpose (SOP) Assistive Communication Project
+* **Project**: Statement of Purpose  Assistive Communication Project
 * Built using Google MediaPipe, OpenCV, Scikit-Learn, Streamlit, and gTTS.
